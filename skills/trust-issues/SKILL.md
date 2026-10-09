@@ -39,6 +39,7 @@ Do not apply it to a small, local change that the current design already handles
 5. **Rebuild from the facts.** Ask: "Knowing only the goal and the facts, what is the simplest design that works?"
    - Start from the data shape and who owns it. Logic follows from that.
    - Put each decision in the lowest layer that owns it.
+   - When a standard or a spec defines the behaviour, name the data in its terms before you sketch. A design that needs words the standard does not use has usually kept an old assumption.
    - Sketch two or three designs that differ in data shape or ownership. A variant of the same shape is not an alternative. Pick one and say in one line why each other lost.
    - If the redesign needs scale numbers or research, hand that part to `/lets-build-pyramids`.
 

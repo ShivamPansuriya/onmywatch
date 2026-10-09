@@ -1,0 +1,34 @@
+schema_version: "1.1"
+name: talk-is-cheap-second-exception-list
+tags: [talk-is-cheap]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: >-
+    Add pre-orders to the shop in shop/. Some upcoming products (p7 and p9 for now) cannot be bought yet,
+    but customers can pre-order them: the listing shows "Pre-order" for them and the cart accepts them as a
+    pre-order line. When stock arrives a pre-order product becomes a normal product. Implement it.
+  max_turns: 20
+  allowed_tools: [Skill, Read, Edit, Write, Glob, Grep]
+graders:
+  - name: one-fact
+    type: llm
+    weight: 3
+    criteria: >-
+      Each product's sale state (for example available, sold out, pre-order) is one value with one owner,
+      such as a status field or a single map from product to state, so a product cannot be both sold out and
+      on pre-order. FAIL if the change adds a second set or list of product ids (such as PREORDER) beside
+      OUT_OF_STOCK, leaving two collections that together decide what a product's state is.
+  - name: callers-ask-one-place
+    type: llm
+    weight: 2
+    criteria: >-
+      listing, cart and restock read or change the state through the one owner (one function or the one
+      field), not by checking two collections each. Restocking or selling out a pre-order product leaves it
+      in exactly one state.
+  - name: noticed
+    type: llm
+    weight: 1
+    criteria: >-
+      The reply names the structural point: the existing exception set would need a second exception set, and
+      the change replaces that with one state per product.

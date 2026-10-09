@@ -15,6 +15,7 @@ Scan all areas. Report at most the 3 that matter for this change. Areas follow I
 | Readability | Vague names; functions doing two things; nesting over 3 levels; clever code off the hot path | Name by meaning; split; early return; plain code |
 | Maintainability | Duplication of a rule; one-use abstraction; dead code; hidden side effects; coupling across layers | One home per rule; inline the abstraction; delete; pass dependencies in |
 | Patterns | A pattern with nothing to solve: factory for one product, interface with one implementation, singleton holding state, strategy with one strategy | Plain function or direct call. Name a pattern only when it removes a real problem |
+| Guards | Code that polices misuse of a design at run time: scans of subclasses or methods at startup, reads of a framework's internals, a global check added for one case | The shape is wrong. Use the existing extension point, or change the shape so the misuse cannot be written |
 | Security | Injection (SQL, shell, path); secrets in code or logs; unchecked input at a trust boundary; missing access check | Parameterise; secrets from config, masked in logs; validate at the edge; check access in the owner |
 | Reliability | No input size limit; partial failure leaves half-written state; data-loss path | Limits; transaction or write-then-rename; make the operation idempotent |
 | Observability | A failure you could not explain at 3am: no log, no context, no metric | Log the decision with ids; error carries context; one metric on the hot path |
