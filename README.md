@@ -20,7 +20,9 @@ claude plugin marketplace add dip497/onmywatch
 claude plugin install onmywatch@onmywatch
 ```
 
-Restart Claude Code after installing. To update later:
+Restart Claude Code after installing.
+
+To get new versions automatically, turn on auto-update once: `/plugin` → Marketplaces → `onmywatch` → Enable auto-update. Claude Code then updates at startup and asks you to run `/reload-plugins`. To update by hand:
 
 ```
 claude plugin marketplace update onmywatch
