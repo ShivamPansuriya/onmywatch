@@ -7,7 +7,7 @@ import re
 import sys
 from html.parser import HTMLParser
 
-EXHIBITS = {"tree", "anno", "limit", "flow", "timeline", "diagram"}
+EXHIBITS = {"tree", "anno", "limit", "flow", "timeline", "diagram", "path", "decisions", "gaps", "code"}
 BANNED = ["utilize", "leverage", "ensure", "robust", "seamless", "in order to", "prior to", "commence", "very", "basically"]
 PAIRS = [("ink", "paper"), ("muted", "paper"), ("muted", "fill"), ("note", "paper"), ("note", "note-soft"),
          ("ok", "paper"), ("bad", "paper"), ("badge-ink", "badge")]
@@ -26,12 +26,22 @@ class Sheet(HTMLParser):
         self.stack, self.panels, self.text, self.style = [], [], [], ""
         self.edges = self.edge_labels = 0
         self.cur = None
+        self.walkthrough = False
+        self.step_titles = []
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         cls = set((a.get("class") or "").split())
         if tag not in ("br", "img", "meta", "link", "input", "path", "rect", "circle", "line", "polyline", "polygon"):
             self.stack.append((tag, cls))
+        if tag == "div" and "walkthrough" in cls:
+            self.walkthrough = True
+        if tag == "section" and "view" in cls:
+            self.view_no = getattr(self, "view_no", 0) + 1
+            self.step_no = 0
+        if tag == "details" and "step" in cls:
+            self.step_no += 1
+            self.step_titles.append([f"view {self.view_no} step {self.step_no}", ""])
         if tag == "section" and "panel" in cls:
             self.cur = {"title": "", "exhibits": set()}
             self.panels.append(self.cur)
@@ -60,6 +70,8 @@ class Sheet(HTMLParser):
             return
         if self.cur is not None and "h2" in tags:
             self.cur["title"] += data
+        if "h3" in tags and "summary" in tags and self.step_titles:
+            self.step_titles[-1][1] += data
         if data.strip():
             self.text.append((tags[-1] if tags else "", data.strip()))
 
@@ -106,7 +118,14 @@ for rule in re.finditer(r"([^{}]+)\{([^}]*)\}", css):
         if float(size) < floor:
             report("ERROR", f"font {size}px in `{sel[:50]}`, floor is {floor}px")
 
-if not 1 <= len(sheet.panels) <= 6:
+for where, t in sheet.step_titles:
+    words = t.split()
+    if len(words) > 14:
+        report("WARN", f"{where}: title has {len(words)} words, keep to 14")
+    elif words and not t.strip().endswith("."):
+        report("WARN", f"{where}: title '{t.strip()}' reads as a label; make it a sentence")
+
+if not sheet.walkthrough and not 1 <= len(sheet.panels) <= 6:
     report("ERROR", f"{len(sheet.panels)} panels, use 1 to 6")
 for i, p in enumerate(sheet.panels):
     letter = chr(65 + i)
@@ -123,7 +142,7 @@ for i, p in enumerate(sheet.panels):
 pieces = [t for tag, t in sheet.text if tag in ("p", "li", "figcaption", "h2", "small")]
 prose = " ".join(pieces)
 total = len(" ".join(t for _, t in sheet.text).split())
-if total > 450:
+if total > 450 and not sheet.walkthrough:
     report("WARN", f"{total} words on the sheet, keep to 450")
 for s in (s for piece in pieces for s in re.split(r"(?<=[.!?])\s+", piece)):
     if len(s.split()) > 25:

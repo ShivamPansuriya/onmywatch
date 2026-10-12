@@ -19,7 +19,8 @@ Climb only as far as the point needs. Stop at the first level that makes it clea
 | 1. Words | One fact or one rule | Two or three sentences in Simplified Technical English (below) |
 | 2. Text picture | Logic, calls, files, a change | A code block in the chat (shapes below) |
 | 3. Diagram | Several parts talk to each other, or a lifecycle | Mermaid in the chat |
-| 4. Sheet | Many related parts, a comparison, or the reader asked for `sheet` or `share` | One HTML file built from a JSON spec |
+| 4. Sheet | Many related parts, a comparison, or the reader asked for `sheet` or `share` | One HTML page built from a JSON spec |
+| 5. Walkthrough page | Understanding how something works and why, with more than one view (usually from `/walk-me-through`) | One HTML page with tabs and a guided tour per tab |
 
 ## Level 2: text pictures
 
@@ -78,6 +79,17 @@ You write only the content, as a small JSON file. `scripts/build.py` adds the pr
 
    Use one exhibit key per panel, not all of them. `` `x` `` in any text becomes code. `"half": true` sets two short panels side by side.
 
+   Three more exhibits, mostly for walkthroughs:
+
+```json
+"path": [{"where": "`file.py:40` or 'Support desk'", "what": "What happens here.", "passes": "What goes to the next step"}],
+"decisions": [{"choice": "What was chosen", "over": ["What lost"], "why": "The reason", "confidence": "direct | supported | inferred | unknown", "source": "Where it is written"}],
+"gaps": [{"question": "What we could not find", "looked": "Where we looked", "ask": "Who could answer"}],
+"code": {"where": "file.py:40", "text": "the snippet"}
+```
+
+   A decision without a source must be `unknown`; the builder refuses it otherwise.
+
 4. **Diagrams: draw the mechanism, not its name.** Pick `diagram` when the point is which parts talk, where data flows, or the hop being added.
    - Place nodes on a grid with `col` and `row`. Main path left to right on row 0; stores and branches directly below their owner. At most 3 columns.
    - Show only the parts the point depends on. To compare options, draw the edge each option adds or removes.
@@ -85,6 +97,19 @@ You write only the content, as a small JSON file. `scripts/build.py` adds the pr
    - Edges go straight or with one bend. If two edges would cross or pass through a box, move the nodes.
    - `new` is dashed blue: new, proposed, or a step the reader runs. `store` is a filled box for data at rest.
 5. **Colour means something or it is not used.** Normal is ink, new is blue and dashed, `ok:` is green, `bad:` is red. No other colour.
+**Walkthrough pages.** Replace `panels` with `views`. Each view is a tab with a short guided tour; each step is one point, with an optional `body` and at most one exhibit:
+
+```json
+{"title": "...", "meta": "...", "lead": {"answer": "...", "points": ["..."]},
+ "views": [
+   {"label": "Flow", "summary": "What happens when a person signs in.",
+    "steps": [
+      {"title": "A sentence that states this step's point.", "body": "One or two sentences.", "path": [...]},
+      {"title": "...", "diagram": {...}}]}]}
+```
+
+   Steps open one at a time with Previous / Next (or the arrow keys); number keys switch views. To build a picture up, repeat the diagram in the next step with one more node, marked `new`. There is no word cap on a walkthrough; keep each step to one point instead. For review screenshots, build a copy with `--open-all`: every view and step open.
+
 6. **Build**: `python3 <this skill>/scripts/build.py .show-me/<folder>/sheet.json` writes `sheet.html` beside it and checks it. Errors fail on contrast under 4.5:1 in either theme, text under 14 px, no lead, or more than 6 panels. Warnings flag label-style titles, unlabelled arrows, sentences over 25 words, more than 450 words and words to replace. Fix the JSON and build again.
 7. **Look at it.** Take screenshots at desktop width, at phone width and in dark mode, into the folder's `shots/`, for example `chromium --headless --screenshot=.show-me/<folder>/shots/desktop.png --window-size=1400,1500 file:///full/path/sheet.html`; for dark, add `data-theme="dark"` to `<html>` in a copy. Read each one. Fix clipped text, overlaps, crossed lines and anything hard to read. At most two rounds of fixes. If you could not take screenshots, say so; never report that it looks right unseen.
 8. **Need a part the builder does not have?** Build first, then add it by hand to the HTML, using the CSS variables (`--ink`, `--note`, `--ok`, `--bad`, `--muted`, `--paper`, `--fill`) so both themes work, and run `scripts/check.py sheet.html`.

@@ -1,0 +1,36 @@
+schema_version: "1.1"
+name: walk-me-through-code-flow
+tags: [walk-me-through]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: "I'm new to this codebase and need to change the idle sign-out next week. Walk me through how it works and why it is built this way."
+  max_turns: 20
+  allowed_tools: [Skill, Read, Glob, Grep]
+graders:
+  - name: flow-in-order
+    type: llm
+    weight: 2
+    criteria: >-
+      The explanation follows the real path in order with file references: IAM token_customizer.py writes ma_session_idle into
+      the ID token, gateway/me.py returns it as idleSeconds from /bff/me, web/boot.js starts the timer, web/idle-timer.js checks
+      the last activity every second, warns 2 minutes before the limit and signs out, and web/activity.js records real input
+      shared across tabs.
+  - name: why-cited
+    type: llm
+    weight: 2
+    criteria: >-
+      It explains why the limit travels in the ID token (the gateway must stay stateless; reading the database or calling IAM
+      on every request was rejected) and cites docs/decisions/0007-limits-in-token.md as the source.
+  - name: no-invented-why
+    type: llm
+    weight: 1
+    criteria: >-
+      For choices with no recorded reason (for example the 2-minute warning or the 1-second check interval), it either says
+      no reason was found or clearly marks its explanation as a guess; it does not state an invented reason as fact.
+  - name: mission
+    type: llm
+    weight: 1
+    criteria: >-
+      Because the user will change this next week, the answer points out where to make the change or what to watch out for
+      (for example the token claim, the tab-shared localStorage key, or the warning offset).

@@ -39,6 +39,7 @@ claude plugin update onmywatch@onmywatch
 | `/trust-issues` | First-principles redesign: separates facts from inherited choices and habits, then rebuilds the design from the facts. | You or the agent |
 | `/next-time-faster` | Run at the end of a long session. Finds the setup and steps that cost time and will come back, then proposes the lightest fix that holds: nothing, a doc pointer, a script, a hook, or as a last resort a skill. Builds only after approval and proves what it builds. | You |
 | `/brooooo` | Press it when a reply did not land or the agent got something wrong. It restates plainly, or owns the mistake and fixes it. | You |
+| `/walk-me-through` | Explains how something works and why it is that way: finds the ground truth, follows the real thing step by step, and gives each decision with its source and how sure it is. Works for code, processes, incidents or a session's work. Builds a tabbed page with guided tours through `/show-me` when asked. | You or the agent |
 | `/show-me` | Shows the topic instead of explaining it: a text picture or Mermaid in the chat, or an HTML engineering sheet built from a small JSON spec and premade assets (`/show-me sheet`, `/show-me share`). | You |
 | `/no-added-comments` | Keeps diffs free of comments the agent added. | You or the agent |
 
@@ -118,6 +119,7 @@ Latest scores, 3 runs per case:
 
 - `just-tell-me` adapts [i-have-adhd](https://github.com/ayghri/i-have-adhd) by Ayoub Ghriss (MIT), with lessons from [caveman](https://github.com/JuliusBrussee/caveman) by Julius Brussee and [caveman-micro](https://github.com/kuba-guzik/caveman-micro).
 - `brooooo` adapts `bro`, and `trust-issues` adapts `principle-redesign-from-first-principles` and `principle-attack-the-premise`, from [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan (MIT).
+- `walk-me-through` draws on pstack's `how`, `why` (its confidence tiers) and `teach`, Matt Pocock's `teach` (mission first), Warp's `pr-walkthrough` (separate views with guided tours, sized to the subject) and egonex's `understand-anything`.
 - `show-me` draws on [show-me](https://github.com/humanlayer/skills/tree/main/plugins/show-me) by HumanLayer (MIT), the [html-plan](https://github.com/anthropics/claude-plugins-community/tree/main/html-plan) plugin by Thariq Shihipar (MIT), [archify](https://github.com/tt-a1i/archify) by tt-a1i (MIT), Claude's artifact design and diagramming guidance, and Andrej Karpathy's note on asking for STE text, diagrams and HTML instead of prose.
 - `talk-is-cheap` adapts the ladder and root-cause rule from [ponytail](https://github.com/DietrichGebert/ponytail) by Dietrich Gebert (MIT), pstack's `model-the-domain` and `foundational-thinking`, and the ISO/IEC 25010 quality model.
 - `trust-me-bro` adapts [test-audit](https://github.com/openclaw/openclaw/blob/main/.agents/skills/test-audit/SKILL.md) from openclaw (MIT) and pstack's `principle-test-behavior-not-implementation`.

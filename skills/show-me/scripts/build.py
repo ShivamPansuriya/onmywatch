@@ -1,7 +1,10 @@
-"""Build a show-me sheet from a small JSON spec, then check it.
+"""Build a show-me page from a small JSON spec, then check it.
 
-Usage: python3 build.py sheet.json [out.html]
-Writes out.html (default: next to the JSON) with the CSS inlined, runs check.py, exits 1 on a check error.
+Usage: python3 build.py page.json [out.html] [--open-all]
+--open-all writes every step open and every view visible, for review screenshots.
+A spec with "panels" builds a one-screen sheet. A spec with "views" builds a walkthrough:
+tabs, one guided tour of steps per tab. Writes out.html (default: next to the JSON) with the
+CSS inlined, runs check.py, exits 1 on a check error.
 """
 import json
 import subprocess
@@ -13,6 +16,8 @@ HERE = Path(__file__).resolve().parent
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
          '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500'
          '&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">')
+CONFIDENCE = ("direct", "supported", "inferred", "unknown")
+warnings = []
 
 
 def code(text):
@@ -25,7 +30,7 @@ def tree(t):
     items = "".join(f"<li>{code(i[0])}<small>{code(i[1])}</small></li>" if len(i) > 1 else f"<li>{code(i[0])}</li>"
                     for i in t["items"])
     sub = f"<small>{code(t['sub'])}</small>" if t.get("sub") else ""
-    return f'<div class="body tree"><div class="root"><b>{code(t["root"])}</b>{sub}</div><ul>{items}</ul></div>'
+    return f'<div class="tree"><div class="root"><b>{code(t["root"])}</b>{sub}</div><ul>{items}</ul></div>'
 
 
 def anno(parts):
@@ -45,7 +50,7 @@ def cell(c):
 
 
 def table(t):
-    head = "".join(f"<th>{e(h)}</th>" for h in t["head"])
+    head = "".join(f"<th>{code(h)}</th>" for h in t["head"])
     rows = "".join("<tr>" + "".join(cell(c) for c in r) + "</tr>" for r in t["rows"])
     return f'<div class="scroll"><table><tr>{head}</tr>{rows}</table></div>'
 
@@ -64,56 +69,138 @@ def timeline(ts):
     return '<div class="timeline">' + "".join(f"<div><b>{e(a)}</b>{e(b)}</div>" for a, b in ts) + "</div>"
 
 
+def path(ps):
+    """An ordered trace through a thing: where each step happens, what it does, what it passes on."""
+    rows = []
+    for i, p in enumerate(ps, 1):
+        if not p.get("where"):
+            sys.exit(f"path step {i} has no 'where'")
+        passes = f'<span class="passes">passes {code(p["passes"])}</span>' if p.get("passes") else ""
+        rows.append(f'<li><span class="where">{code(p["where"])}</span><span class="what">{code(p["what"])}</span>{passes}</li>')
+    return f'<ol class="path">{"".join(rows)}</ol>'
+
+
+def decisions(ds):
+    rows = []
+    for d in ds:
+        conf = d.get("confidence", "").lower()
+        if conf not in CONFIDENCE:
+            sys.exit(f"decision '{d.get('choice')}' needs confidence: one of {', '.join(CONFIDENCE)}")
+        if conf != "unknown" and not d.get("source"):
+            sys.exit(f"decision '{d.get('choice')}' needs a source, or confidence 'unknown'")
+        over = "".join(f"<li>{code(o)}</li>" for o in d.get("over", []))
+        over = f'<div class="over"><span>Not chosen</span><ul>{over}</ul></div>' if over else ""
+        src = f'<div class="src">Source: {code(d["source"])}</div>' if d.get("source") else ""
+        rows.append(f'<div class="decision"><div class="dhead"><b>{code(d["choice"])}</b>'
+                    f'<span class="conf {conf}">{conf}</span></div>{over}'
+                    f'<p>{code(d.get("why", "No reason found."))}</p>{src}</div>')
+    return f'<div class="decisions">{"".join(rows)}</div>'
+
+
+def gaps(gs):
+    """What could not be found or traced, and who could answer it."""
+    rows = "".join(f'<li><b>{code(g["question"])}</b>'
+                   + (f'<span class="looked">Looked in: {code(g["looked"])}</span>' if g.get("looked") else "")
+                   + (f'<span class="ask">Ask: {code(g["ask"])}</span>' if g.get("ask") else "") + "</li>" for g in gs)
+    return f'<ul class="gaps">{rows}</ul>'
+
+
+def snippet(c):
+    text = c["text"].rstrip("\n")
+    where = f'<div class="where">{code(c["where"])}</div>' if c.get("where") else ""
+    block = f'<pre class="code"><code>{e(text)}</code></pre>'
+    if text.count("\n") >= 12:
+        block = f"<details><summary>Show {text.count(chr(10)) + 1} lines</summary>{block}</details>"
+    return where + block
+
+
+# ---------- diagram: grid layout, routes that avoid boxes ----------
+
+def _hits(seg, r, pad=4):
+    (x1, y1), (x2, y2) = seg
+    rx, ry, rw, rh = r[0] - pad, r[1] - pad, r[2] + 2 * pad, r[3] + 2 * pad
+    if x1 == x2:
+        lo, hi = sorted((y1, y2))
+        return rx < x1 < rx + rw and lo < ry + rh and hi > ry
+    lo, hi = sorted((x1, x2))
+    return ry < y1 < ry + rh and lo < rx + rw and hi > rx
+
+
+def _clear(points, others):
+    segs = list(zip(points, points[1:]))
+    return not any(_hits(s, r) for s in segs for r in others)
+
+
 def diagram(d, claim):
-    """Nodes sit on a grid (col, row). Edges go straight, or as one L bend, between box edges."""
+    """Nodes sit on a grid (col, row). Each edge takes the first route that crosses no other box."""
     nodes = {n["id"]: n for n in d["nodes"]}
-    char, pad, row_h, gap_x, gap_y = 9, 28, 64, 120, 70
+    char, pad, row_h, gap_x, gap_y = 9, 28, 64, 120, 80
     cols = max(n["col"] for n in nodes.values()) + 1
     rows = max(n["row"] for n in nodes.values()) + 1
     col_w = [110] * cols
     for n in nodes.values():
-        col_w[n["col"]] = max(col_w[n["col"]], len(n["label"]) * char + pad, len(n.get("sub", "")) * 7.5 + pad, 110)
+        col_w[n["col"]] = max(col_w[n["col"]], len(n["label"]) * char + pad, len(n.get("sub", "")) * 7.5 + pad)
     for ed in d["edges"]:
-        a, b = nodes[ed["from"]], nodes[ed["to"]]
-        if a["row"] == b["row"] and abs(a["col"] - b["col"]) == 1:
-            gap_x = max(gap_x, len(ed.get("label", "")) * 8 + 40)
+        gap_x = max(gap_x, min(len(ed.get("label", "")) * 8 + 40, 260))
     xs = [20 + sum(col_w[:c]) + gap_x * c for c in range(cols)]
     W = xs[-1] + col_w[-1] + 20
-    H = 20 + rows * row_h + (rows - 1) * gap_y + 20
+    H = 20 + rows * row_h + rows * gap_y
 
     def box(n):
-        w = col_w[n["col"]]
-        x = xs[n["col"]]
-        y = 20 + n["row"] * (row_h + gap_y)
-        return x, y, w, row_h
+        return xs[n["col"]], 20 + n["row"] * (row_h + gap_y), col_w[n["col"]], row_h
 
-    edges, labels, shapes = [], [], []
+    pair_count, edges, labels, shapes = {}, [], [], []
+    used_bottom = max(box(n)[1] + row_h for n in nodes.values())
+    used_right = W
     for ed in d["edges"]:
         a, b = nodes[ed["from"]], nodes[ed["to"]]
         ax, ay, aw, ah = box(a)
         bx, by, bw, bh = box(b)
-        new = " new" if ed.get("new") else ""
+        others = [box(n) for k, n in nodes.items() if k not in (ed["from"], ed["to"])]
+        key = tuple(sorted((ed["from"], ed["to"])))
+        k = pair_count.get(key, 0)
+        pair_count[key] = k + 1
+        off = 24 * k
+        acx, acy, bcx, bcy = ax + aw / 2, ay + ah / 2, bx + bw / 2, by + bh / 2
+        right = bx > ax
+        down = by > ay
+        cands = []
         if a["row"] == b["row"]:
-            y = ay + ah / 2
-            x1, x2 = (ax + aw, bx) if bx > ax else (ax, bx + bw)
-            path, lx, ly = f"M{x1},{y} H{x2}", (x1 + x2) / 2, y - 8
-        elif a["col"] == b["col"]:
-            x = ax + aw / 2
-            y1, y2 = (ay + ah, by) if by > ay else (ay, by + bh)
-            path, lx, ly = f"M{x},{y1} V{y2}", x + 10, (y1 + y2) / 2 + 5
-        else:
-            y = ay + ah / 2
-            x1 = ax + aw if bx > ax else ax
-            x2 = bx + bw / 2
-            y2 = by if by > ay else by + bh
-            path, lx, ly = f"M{x1},{y} H{x2} V{y2}", (x1 + x2) / 2, y - 8
-        edges.append(f'<path class="edge{new}" d="{path}" marker-end="url(#arrow)"/>')
+            y = acy + off
+            cands.append([(ax + aw if right else ax, y), (bx if right else bx + bw, y)])
+        if a["col"] == b["col"]:
+            x = acx + off
+            cands.append([(x, ay + ah if down else ay), (x, by if down else by + bh)])
+        if a["row"] != b["row"] and a["col"] != b["col"]:
+            cands.append([(ax + aw if right else ax, acy + off), (bcx + off, acy + off), (bcx + off, by if down else by + bh)])
+            cands.append([(acx + off, ay + ah if down else ay), (acx + off, bcy + off), (bx if right else bx + bw, bcy + off)])
+        for lane_y in (max(ay, by) + row_h + gap_y / 2 + off, min(ay, by) - gap_y / 2 + off):
+            if 4 < lane_y < H - 4:
+                sy = ay + ah if lane_y > ay else ay
+                ey = by + bh if lane_y > by else by
+                cands.append([(acx + off, sy), (acx + off, lane_y), (bcx + off, lane_y), (bcx + off, ey)])
+        pts = next((c for c in cands if _clear(c, others)), None)
+        if pts is None:
+            pts = cands[0]
+            warnings.append(f"diagram '{claim[:40]}': edge {ed['from']}→{ed['to']} crosses a box; move the nodes")
+        new = " new" if ed.get("new") else ""
+        dpath = "M" + " L".join(f"{x:.0f},{y:.0f}" for x, y in pts)
+        edges.append(f'<path class="edge{new}" d="{dpath}" marker-end="url(#arrow)"/>')
+        used_bottom = max([used_bottom] + [y for _, y in pts])
         if ed.get("label"):
+            segs = list(zip(pts, pts[1:]))
+            (x1, y1), (x2, y2) = max(segs, key=lambda s: abs(s[0][0] - s[1][0]) + abs(s[0][1] - s[1][1]))
             t = ed["label"]
             w = len(t) * 8 + 12
-            anchor_x = lx - w / 2 if a["col"] != b["col"] else lx - 4
-            labels.append(f'<rect class="mask" x="{anchor_x}" y="{ly - 14}" width="{w}" height="19"/>'
-                          f'<text class="elbl{new}" x="{anchor_x + 6}" y="{ly}">{e(t)}</text>')
+            if y1 == y2:
+                lx, ly = (x1 + x2) / 2 - w / 2, (y1 - 6 if k == 0 else y1 + 20)
+            else:
+                lx, ly = (x1 + 8 if k == 0 else x1 - w - 8), (y1 + y2) / 2 + 5
+            if any(_hits(((lx, ly - 7), (lx + w, ly - 7)), r, 0) for r in [box(n) for n in nodes.values()]):
+                warnings.append(f"diagram '{claim[:40]}': label '{t}' overlaps a box; shorten it or move the nodes")
+            used_right = max(used_right, lx + w + 12)
+            labels.append(f'<rect class="mask" x="{lx:.0f}" y="{ly - 14:.0f}" width="{w}" height="19"/>'
+                          f'<text class="elbl{new}" x="{lx + 6:.0f}" y="{ly:.0f}">{e(t)}</text>')
     for n in nodes.values():
         x, y, w, h = box(n)
         kinds = " ".join(k for k in ("new", "store") if n.get(k))
@@ -122,6 +209,8 @@ def diagram(d, claim):
                       f'<text class="lbl" x="{x + w / 2}" y="{cy}" text-anchor="middle">{e(n["label"])}</text>')
         if n.get("sub"):
             shapes.append(f'<text class="sub" x="{x + w / 2}" y="{y + h / 2 + 16}" text-anchor="middle">{e(n["sub"])}</text>')
+    H = used_bottom + 24
+    W = used_right
     marker = ('<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" '
               'orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>')
     svg = (f'<svg viewBox="0 0 {W:.0f} {H:.0f}" role="img" aria-label="{e(claim)}" style="min-width:{min(W, 680):.0f}px">'
@@ -129,33 +218,76 @@ def diagram(d, claim):
     return f'<figure class="diagram"><div class="scroll">{svg}</div></figure>'
 
 
-EXHIBITS = {"tree": tree, "anno": anno, "table": table, "limits": limits, "flow": flow, "timeline": timeline}
+EXHIBITS = {"diagram": None, "tree": tree, "anno": anno, "table": table, "limits": limits, "flow": flow,
+            "timeline": timeline, "path": path, "decisions": decisions, "gaps": gaps, "code": snippet}
+
+
+def exhibit(item, claim, where, required=True):
+    kinds = [k for k in EXHIBITS if k in item]
+    if len(kinds) > 1 or (required and not kinds):
+        sys.exit(f"{where}: needs {'exactly' if required else 'at most'} one of {', '.join(EXHIBITS)}, got {kinds}")
+    if not kinds:
+        return ""
+    k = kinds[0]
+    inner = diagram(item[k], claim) if k == "diagram" else EXHIBITS[k](item[k])
+    cap = f'<p class="caption">{code(item["caption"])}</p>' if item.get("caption") else ""
+    return inner + cap
 
 
 def panel(i, p):
-    kinds = [k for k in (*EXHIBITS, "diagram") if k in p]
-    if len(kinds) != 1:
-        sys.exit(f"panel {chr(65 + i)}: needs exactly one of {', '.join((*EXHIBITS, 'diagram'))}, got {kinds}")
-    k = kinds[0]
-    if k == "diagram":
-        inner = diagram(p[k], p["title"])
-    elif k == "tree":
-        inner = tree(p[k])
-    else:
-        inner = EXHIBITS[k](p[k])
-    if k != "tree":
-        cap = f'<p class="caption">{code(p["caption"])}</p>' if p.get("caption") else ""
-        inner = f'<div class="body">{inner}{cap}</div>'
     ref = f'<span class="ref">{code(p["ref"])}</span>' if p.get("ref") else ""
     half = " w6" if p.get("half") else ""
+    body = exhibit(p, p["title"], f"panel {chr(65 + i)}")
     return (f'<section class="panel{half}"><header><span class="badge">{chr(65 + i)}</span>'
-            f'<div><h2>{code(p["title"])}</h2>{ref}</div></header>{inner}</section>')
+            f'<div><h2>{code(p["title"])}</h2>{ref}</div></header><div class="body">{body}</div></section>')
 
 
-spec = json.loads(Path(sys.argv[1]).read_text())
-out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(sys.argv[1]).with_suffix(".html")
+def view(vi, v):
+    steps = []
+    for si, s in enumerate(v["steps"]):
+        body = f'<p>{code(s["body"])}</p>' if s.get("body") else ""
+        body += exhibit(s, s["title"], f"view '{v['label']}' step {si + 1}", required=False)
+        open_ = " open" if si == 0 or OPEN_ALL else ""
+        steps.append(f'<details class="step"{open_} data-step="{si}"><summary><span class="num">{si + 1}</span>'
+                     f'<h3>{code(s["title"])}</h3></summary><div class="body">{body}</div></details>')
+    summary = f'<p class="vsum">{code(v["summary"])}</p>' if v.get("summary") else ""
+    nav = (f'<div class="tour"><button type="button" data-go="-1">Previous step</button>'
+           f'<span class="pos">Step 1 / {len(steps)}</span><button type="button" data-go="1">Next step</button></div>')
+    return (f'<section class="view" id="view-{vi}" data-view="{vi}"><h2 class="vtitle">{code(v["label"])}</h2>'
+            f'{summary}{nav}{"".join(steps)}</section>')
+
+
+TOUR_JS = """<script>
+(()=>{document.documentElement.classList.add('js');
+const views=[...document.querySelectorAll('.view')],tabs=[...document.querySelectorAll('.tabs button')];
+function show(i){views.forEach((v,j)=>v.hidden=j!==i);tabs.forEach((t,j)=>t.setAttribute('aria-selected',j===i));}
+tabs.forEach((t,i)=>t.addEventListener('click',()=>show(i)));
+views.forEach(v=>{const s=[...v.querySelectorAll('.step')],pos=v.querySelector('.pos');let cur=0;
+function go(n){cur=Math.max(0,Math.min(s.length-1,n));s.forEach((d,j)=>d.open=j===cur);
+pos.textContent='Step '+(cur+1)+' / '+s.length;s[cur].scrollIntoView({block:'nearest'});}
+v.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(cur+Number(b.dataset.go))));
+s.forEach((d,j)=>d.querySelector('summary').addEventListener('click',()=>{cur=j;pos.textContent='Step '+(j+1)+' / '+s.length;}));});
+document.addEventListener('keydown',ev=>{if(ev.target.closest('input,textarea'))return;
+const v=views.find(x=>!x.hidden);if(!v)return;if(ev.key==='ArrowRight'||ev.key==='n')v.querySelector('[data-go="1"]').click();
+if(ev.key==='ArrowLeft'||ev.key==='p')v.querySelector('[data-go="-1"]').click();
+const k=Number(ev.key);if(k>=1&&k<=views.length)show(k-1);});
+if(views.length)show(0);})();
+</script>"""
+
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+OPEN_ALL = "--open-all" in sys.argv
+spec = json.loads(Path(args[0]).read_text())
+out = Path(args[1]) if len(args) > 1 else Path(args[0]).with_suffix(".html")
 lead = spec["lead"]
 points = "".join(f"<li>{code(p)}</li>" for p in lead.get("points", []))
+if "views" in spec:
+    tabs = "".join(f'<button type="button" role="tab">{code(v["label"])}</button>' for v in spec["views"])
+    main = (f'<nav class="tabs" role="tablist">{tabs}</nav>'
+            f'<div class="views">{"".join(view(i, v) for i, v in enumerate(spec["views"]))}</div>')
+    kind, script = "walkthrough", ("" if OPEN_ALL else TOUR_JS)
+else:
+    main = f'<div class="grid">{"".join(panel(i, p) for i, p in enumerate(spec["panels"]))}</div>'
+    kind, script = "sheet", ""
 page = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -164,20 +296,21 @@ page = f"""<!doctype html>
 <title>{e(spec["title"])}</title>
 {FONTS}
 <style>
-{(HERE.parent / "assets" / "sheet.css").read_text()}figure.diagram .scroll,div.scroll{{overflow-x:auto}}
+{(HERE.parent / "assets" / "sheet.css").read_text()}
 </style>
 </head>
 <body>
-<div class="sheet">
+<div class="sheet {kind}">
 <div class="titleblock"><h1>{e(spec["title"])}</h1><span class="meta">{e(spec.get("meta", ""))}</span></div>
 <div class="lead"><p>{code(lead["answer"])}</p><ul>{points}</ul></div>
-<div class="grid">
-{"".join(panel(i, p) for i, p in enumerate(spec["panels"]))}
+{main}
 </div>
-</div>
+{script}
 </body>
 </html>
 """
 out.write_text(page)
 print(f"wrote {out}")
+for w in warnings:
+    print(f"WARN {w}")
 sys.exit(subprocess.run([sys.executable, str(HERE / "check.py"), str(out)]).returncode)

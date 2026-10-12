@@ -103,3 +103,66 @@ figure.diagram figcaption{font-size:15px;color:var(--muted);margin-top:10px}
   .lead{margin-left:16px;margin-right:16px}
   .grid{grid-template-columns:1fr}.panel.w6{grid-column:span 2}
 }
+
+figure.diagram .scroll,div.scroll{overflow-x:auto}
+
+/* Walkthrough: tabs for views, a guided tour of steps in each. Without JS every view shows, stacked. */
+.tabs{display:none;gap:4px;padding:16px 28px 0;border-bottom:1.5px solid var(--line);flex-wrap:wrap}
+.js .tabs{display:flex}
+.tabs button{font:500 16px var(--sans);color:var(--muted);background:none;border:1.5px solid transparent;border-bottom:none;padding:10px 16px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--line);background:var(--paper);margin-bottom:-1.5px}
+.tabs button:focus-visible,.tour button:focus-visible,summary:focus-visible{outline:2px solid var(--note);outline-offset:2px}
+.views{padding:20px 28px 0}
+.view{margin-bottom:32px}
+.view[hidden]{display:none}
+.vtitle{font-size:22px;margin:0 0 6px}
+.js .vtitle{display:none}
+.vsum{color:var(--muted);margin:0 0 14px;max-width:70ch}
+.tour{display:flex;align-items:center;gap:12px;margin:0 0 14px}
+.tour button{font:500 15px var(--sans);color:var(--ink);background:var(--fill);border:1.5px solid var(--line);padding:6px 14px;cursor:pointer}
+.tour .pos{font:14px var(--mono);color:var(--muted)}
+details.step{border:1.5px solid var(--line);margin-bottom:12px;background:var(--paper)}
+details.step>summary{color:var(--ink);font-size:inherit;margin:0;display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:10px 16px}
+details.step>summary::-webkit-details-marker{display:none}
+details.step>summary .num{background:var(--badge);color:var(--badge-ink);font-weight:600;min-width:30px;height:30px;display:grid;place-items:center}
+details.step>summary h3{margin:0;font-size:18px;font-weight:600}
+details.step[open]>summary{border-bottom:1px solid var(--line)}
+details.step .body{padding:16px 20px}
+details.step .body>p{margin:0 0 14px;max-width:72ch}
+
+/* path: an ordered trace through the thing */
+ol.path{list-style:none;counter-reset:p;margin:0;padding:0}
+ol.path li{counter-increment:p;position:relative;padding:8px 0 8px 40px;border-left:1.5px solid var(--line);margin-left:14px}
+ol.path li::before{content:counter(p);position:absolute;left:-14px;top:8px;width:26px;height:26px;border:1.5px solid var(--line);background:var(--paper);display:grid;place-items:center;font:500 14px var(--mono)}
+ol.path .where{display:block;font:500 14px var(--mono);color:var(--note)}
+ol.path .what{display:block}
+ol.path .passes{display:block;font-size:15px;color:var(--muted)}
+
+/* decisions: choice, what lost, why, how sure, where it says so */
+.decisions{display:grid;gap:12px}
+.decision{border:1px solid var(--hair);border-left:4px solid var(--note);padding:12px 16px;background:var(--fill)}
+.decision .dhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.decision p{margin:8px 0 0}
+.decision .over{margin-top:6px;font-size:15px;color:var(--muted)}
+.decision .over span{font-weight:500}
+.decision .over ul{display:inline;margin:0;padding:0 0 0 6px;list-style:none}
+.decision .over li{display:inline}
+.decision .over li+li::before{content:" · "}
+.decision .src{margin-top:6px;font-size:14px;color:var(--muted)}
+.conf{font:500 14px var(--mono);padding:1px 8px;border:1px solid currentColor}
+.conf.direct,.conf.supported{color:var(--ok)}
+.conf.inferred{color:var(--note)}
+.conf.unknown{color:var(--bad)}
+
+/* code */
+pre.code{margin:0;padding:12px 14px;background:var(--fill);border:1px solid var(--hair);overflow-x:auto;font:14px/1.5 var(--mono)}
+details>summary{cursor:pointer;color:var(--note);font-size:15px;margin:6px 0}
+.body>.where{font:500 14px var(--mono);color:var(--note);margin-bottom:6px}
+
+@media (max-width:760px){.tabs,.views{padding-left:16px;padding-right:16px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+
+/* gaps: what we could not find */
+ul.gaps{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+ul.gaps li{border-left:4px solid var(--bad);padding:8px 14px;background:var(--fill)}
+ul.gaps .looked,ul.gaps .ask{display:block;font-size:15px;color:var(--muted)}

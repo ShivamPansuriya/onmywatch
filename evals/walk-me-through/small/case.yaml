@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: walk-me-through-small
+tags: [walk-me-through]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: "What does slugify in utils.py do?"
+  max_turns: 6
+  allowed_tools: [Skill, Read, Glob, Grep]
+graders:
+  - name: short
+    type: llm
+    weight: 2
+    criteria: >-
+      The answer is short (a few sentences or a small example), says it lowercases the text, replaces runs of anything that is
+      not a-z or 0-9 with one hyphen and trims hyphens from the ends, and does not produce multiple views, tours, decision
+      sections or an HTML page.
