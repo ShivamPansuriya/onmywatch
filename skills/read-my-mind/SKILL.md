@@ -17,7 +17,7 @@ transcripts ──scan──> chunks per project ──analysts──> signals �
       └──────── SessionEnd hook starts the next update when one is due (auto on) ◄──────────┘ writes inbox notes
 ```
 
-`mind.py` is in `scripts/` in this skill's base directory. Call it as `python3 <base>/scripts/mind.py`. Pass `--claude-dir DIR` through to every call when the arguments give one. Run each `mind.py` call as its own command, with no pipes, `&&` or other programs: the automatic run allows only `mind.py`. `<memory>` below is the `memory_dir` that `mind.py status` prints.
+`mind.py` is in `scripts/` in this skill's base directory. Call it as `python3 <base>/scripts/mind.py`. Pass `--claude-dir DIR` through to every call when the arguments give one. Run each `mind.py` call as its own command, with no pipes, `&&` or other programs: the automatic run allows only `mind.py`. Read files with the Read tool, never with Bash. The skill's own options (`--auto`, `--model`) are for you; never pass them to `mind.py`. `<memory>` below is the `memory_dir` that `mind.py status` prints.
 
 ## Commands
 
@@ -29,7 +29,8 @@ transcripts ──scan──> chunks per project ──analysts──> signals �
 | `rebuild` (with `since`) | Steps 1–6 with `--rebuild`: read the window again. The evidence file drops duplicates. |
 | `status` | Run `mind.py status` and show it as a short table. Stop. |
 | `auto on`, `auto off` | Run `mind.py config --auto on` (or `off`). Explain the cost and the cap (below). Stop. |
-| `--auto` | You were started by the SessionEnd hook. Ask no questions. Use the `sonnet` model for analysts. |
+| `--auto` | You were started by the SessionEnd hook. Ask no questions. |
+| `--model M` | Start every subagent (analysts, mergers) with `model: M`. The automatic run passes the config's model, `haiku` by default. |
 
 ## 1. Scan
 
@@ -88,7 +89,7 @@ On the first run, when auto is off, ask once whether to turn it on, with the cos
 - at least `min_sessions` transcripts changed since then (default 3);
 - no other update holds the lock.
 
-The update runs `claude -p "/onmywatch:read-my-mind update --auto"` with `--no-session-persistence` (it writes no transcript, so it never reads itself), `--max-budget-usd` (default 3) and tools limited to reading, writing the memory folder and running `mind.py`. Its log goes to `<claude>/read-my-mind/logs/`. Change the limits with `mind.py config --min-hours 48 --min-sessions 5 --budget 2 --model sonnet`.
+The update runs `claude -p "/onmywatch:read-my-mind update --auto"` with `--no-session-persistence` (it writes no transcript, so it never reads itself), `--max-budget-usd` (default 3) and tools limited to reading, writing the memory folder and running `mind.py`. Its log goes to `<claude>/read-my-mind/logs/`. Change the limits with `mind.py config --min-hours 48 --min-sessions 5 --budget 2 --model haiku`. The model (default `haiku`) runs the whole update: the main run and every subagent it starts.
 
 ## Rules
 

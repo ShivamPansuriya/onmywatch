@@ -72,7 +72,7 @@ your sessions ──scan (new lines only)──> your words, per project ──a
 
 Once `~/.claude/agents/mind-reader.md` exists, the SessionStart hook adds one line to every session: run the mind-reader before reporting work as done.
 
-The automatic update runs `claude -p` with no transcript of its own, a budget cap (`--max-budget-usd`, default 3) and at most once a day, only after 3 or more sessions changed. Change it with `mind.py config`.
+The automatic update runs `claude -p` on haiku (the main run and its subagents) with no transcript of its own, a budget cap (`--max-budget-usd`, default 3) and at most once a day, only after 3 or more sessions changed. Change it with `mind.py config`.
 
 To remove it: `python3 <plugin>/skills/read-my-mind/scripts/mind.py config --auto off`, then delete `~/.claude/agents/mind-reader.md`, `~/.claude/agent-memory/mind-reader/` and `~/.claude/read-my-mind/`.
 

@@ -38,7 +38,7 @@ TEMPLATE = HERE.parent / "templates" / "mind-reader.md"
 AGENT = "mind-reader"
 CONTEXT_CHARS = 500
 MESSAGE_CHARS = 1500
-DEFAULT_CONFIG = {"auto": False, "min_hours": 24, "min_sessions": 3, "budget_usd": 3.0, "model": "sonnet"}
+DEFAULT_CONFIG = {"auto": False, "min_hours": 24, "min_sessions": 3, "budget_usd": 3.0, "model": "haiku"}
 
 NOISE_PREFIXES = (
     "This session is being continued", "<local-command", "<task-notification", "Another Claude session",
@@ -536,7 +536,7 @@ def cmd_trigger(args):
     allowed = ["Glob", "Grep", "Agent", "Skill", f"Read(/{root}/**)", f"Read(/{plugin}/**)",
                f"Bash(python3 {HERE / 'mind.py'}:*)"]
     allowed += [f"{tool}(/{path})" for path in writable for tool in ("Edit", "Write")]
-    prompt = "/onmywatch:read-my-mind update --auto"
+    prompt = f"/onmywatch:read-my-mind update --auto --model {cfg['model']}"
     if args.claude_dir or os.environ.get("READ_MY_MIND_CLAUDE_DIR"):
         prompt += f" --claude-dir {root}"
     cmd = [exe, "-p", prompt,
